@@ -17,18 +17,21 @@ app = Flask(__name__)
 scale = 0.02450502473611342250789329380908
 SAVED_MODEL_PATH = "https://tfhub.dev/captain-pool/esrgan-tf2/1"
 
+
 @app.route('/')
 def home():
     return render_template('index.html')
 
 
-@app.route('/test')
-def about():
-    # img64 = request.args.get('img64')
-    img64 = "BASE64 IMAGE GOES HERE"
+@app.route('/ReadCard', methods=['POST'])
+def ReadCard():
+    if request.method == 'POST':
+        img64 = request.form["base64Img"]
 
-    readText = ReadTitleFromCard(img64)
-    return f"Read Text: {readText}"
+        readText = ReadTitleFromCard(img64)
+        return f"Read Text: {readText}"
+    else:
+        return render_template('index.html')
 
 
 def ReadTitleFromCard(base64String):
