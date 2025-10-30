@@ -1,13 +1,12 @@
 import base64
 import re
 
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, Response
 import cv2
 import numpy as np
 import math
 
 import tensorflow as tf
-import tensorflow_hub as hub
 
 from pytesseract import pytesseract
 
@@ -28,16 +27,44 @@ def ReadCard():
     if request.method == 'POST':
         img64 = request.form["base64Img"]
 
-        readText = ReadTitleFromCard(img64)
-        return f"Read Text: {readText}"
+        readText, img = ReadTitleFromCard(img64)
+        # return f"Read Text: {readText}"
+        print(readText)
+        _, buffer = cv2.imencode('.jpg', img)
+        return Response(buffer.tobytes(), mimetype='image/jpeg')
     else:
         return render_template('index.html')
 
 
-def ReadTitleFromCard(base64String):
-    img = base64_to_opencv(base64String)
-    # img = cv2.resize(img, (0, 0), None, 0.5, 0.5)
+images = []
+max_width = 0  # find the max width of all the images
+total_height = 0  # the total height of the images (vertical stacking)
 
+
+def AddImageToList(img):
+    global max_width, total_height
+    images.append(img)
+    if img.shape[1] > max_width:
+        max_width = img.shape[1]
+    total_height += img.shape[0]
+
+
+def CreateCombinedImage():
+    # create a new array with a size large enough to contain all the images
+    final_image = np.zeros((total_height, max_width, 3), dtype=np.uint8)
+
+    current_y = 0  # keep track of where your current image was last placed in the y coordinate
+    for image in images:
+        # add an image to the final array and increment the y coordinate
+        if len(image.shape) < 3:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+        final_image[current_y:image.shape[0] + current_y, :image.shape[1], :] = image
+        current_y += image.shape[0]
+    return final_image
+
+
+def ReadTitleFromCard(base64String):
+    img = Base64ToOpencv(base64String)
     boxImg, conts = GetContours(img, contourThreshold=[100, 100])
 
     if len(conts) == 0:
@@ -45,38 +72,79 @@ def ReadTitleFromCard(base64String):
 
     biggest = conts[0][2]
 
-    croppedImg = CropToCard(boxImg, biggest)
+    finalImage = PrepareForOpticalCharacterRecognition(biggest, boxImg)
+    AddImageToList(finalImage)
 
-    '''
-    preprocessedImg = PreprocessImage(croppedImg)
-
-    model = hub.load(SAVED_MODEL_PATH)
-
-    fake_image = model(preprocessedImg)
-    hiresImage = tf.squeeze(fake_image)
-
-    finalImage = tf.clip_by_value(hiresImage, 0, 255)
-    finalImage = tf.cast(finalImage, tf.uint8).numpy()
-    '''
-    # finalImage = IncreaseContrast(finalImage)
-    finalImage = IncreaseContrast(croppedImg)
-
-    finalImage = cv2.cvtColor(finalImage, cv2.COLOR_BGR2GRAY)
-
-    finalImage = ThresholdImage(finalImage)
+    # TODO detect whitespace between words
 
     path_to_tesseract = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     pytesseract.tesseract_cmd = path_to_tesseract
     text = pytesseract.image_to_string(finalImage)
+    firstLine = text.splitlines()[0] if text.strip() else ""
+    alphanumericOnly = CleanString(firstLine)
 
-    return clean_string(text[:-1])
+    return alphanumericOnly, CreateCombinedImage()
 
 
-def clean_string(text):
+def PrepareForOpticalCharacterRecognition(biggest, boxImg):
+    """
+    Full preprocessing chain before OCR.
+    Handles thresholding, inversion, and horizontal line removal.
+    """
+    croppedImg = CropToCard(boxImg, biggest)
+    AddImageToList(croppedImg)
+    # processImg = np.hstack((processImg, croppedImg))
+    '''
+        preprocessedImg = PreprocessImage(croppedImg)
+    
+        model = hub.load(SAVED_MODEL_PATH)
+    
+        fake_image = model(preprocessedImg)
+        hiresImage = tf.squeeze(fake_image)
+    
+        finalImage = tf.clip_by_value(hiresImage, 0, 255)
+        finalImage = tf.cast(finalImage, tf.uint8).numpy()
+        '''
+    contrastedImg = IncreaseContrast(croppedImg)
+    AddImageToList(contrastedImg)
+    # processImg = np.hstack((processImg, finalImage))
+    greyImage = cv2.cvtColor(contrastedImg, cv2.COLOR_BGR2GRAY)
+    AddImageToList(greyImage)
+    numCascades = 2
+    currentCascade = 0
+    highpassImage = greyImage
+    while currentCascade < numCascades:
+        currentPassImage = Highpass(highpassImage, 3)
+        AddImageToList(highpassImage)
+        # processImg = np.hstack((processImg, finalImage))
+        highpassImage = currentPassImage.copy()
+
+        currentCascade += 1
+    binaryImg = ThresholdImage(highpassImage, invert=True)
+    noLineImg = RemoveHorizontalLines(binaryImg)
+
+    return noLineImg
+
+
+def RemoveHorizontalLines(img):
+
+    # Create horizontal structuring element (tune width if needed)
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 1))
+
+    # Detect horizontal lines
+    detected_lines = cv2.morphologyEx(img, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+
+    # Subtract lines from the inverted image
+    cleaned = cv2.bitwise_not(cv2.subtract(img, detected_lines))
+
+    return cleaned
+
+
+def CleanString(text):
     return re.sub(r'[^a-zA-Z0-9 ]+', '', text).strip()
 
 
-def base64_to_opencv(base64String):
+def Base64ToOpencv(base64String):
     # Decode base64 string to bytes
     image_bytes = base64.b64decode(base64String)
 
@@ -89,8 +157,9 @@ def base64_to_opencv(base64String):
     return image
 
 
-def highpass(img, sigma):
-    return img - cv2.GaussianBlur(img, (5, 5), sigma) + 127
+def Highpass(img, sigma):
+    return img - cv2.GaussianBlur(img, (0, 0), sigma) + 127
+    # return img - cv2.GaussianBlur(img, (5, 5, sigma) + 127
 
 
 def GetContours(img, contourThreshold=None, minArea=2000, draw=False, filter=0):
@@ -125,11 +194,14 @@ def GetContours(img, contourThreshold=None, minArea=2000, draw=False, filter=0):
     return img, finalContours
 
 
-def ThresholdImage(img):
+def ThresholdImage(img, invert=False):
     # Set pixels above the threshold to white (255)
-    img[img > 70] = 255
+    white = 255
+    threshold = 100
 
-    return img
+    thresh_type = cv2.THRESH_BINARY_INV if invert else cv2.THRESH_BINARY
+    _, binary = cv2.threshold(img, threshold, white, thresh_type)
+    return binary
 
 
 def CalcSizePx(points, heightPointMinDistPx=50):
@@ -197,9 +269,8 @@ def GetMinAndMaxFromPoints(points):
         maxY = max(maxY, point[0][1])
 
     # TODO: calculate how much to add to min values based on card size in px
-    return minX, minY + 10, maxX, minY + 50
+    return minX, minY + 20, maxX, minY + 70
     # return minX, minY + 10, maxX, minY + 100
-
 
 
 def PreprocessImage(img):
