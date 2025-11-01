@@ -257,6 +257,7 @@ def IncreaseContrast(finalImage):
 
 
 def GetMinAndMaxFromPoints(points):
+    # returns minX, minY, maxX, maxY
     minX = 10000
     minY = 10000
     maxX = 0
@@ -268,9 +269,15 @@ def GetMinAndMaxFromPoints(points):
         maxX = max(maxX, point[0][0])
         maxY = max(maxY, point[0][1])
 
-    # TODO: calculate how much to add to min values based on card size in px
-    return minX, minY + 20, maxX, minY + 70
-    # return minX, minY + 10, maxX, minY + 100
+    cardWidth = maxX - minX
+    widthMultiplicationConst = 0.07
+    xCoordVropPx = int(cardWidth * widthMultiplicationConst)
+    
+    cardTopOffsetPx = 22
+    heightMultiplicationConst = 0.10
+    cardBotOffsetPx = int(cardWidth * heightMultiplicationConst + cardTopOffsetPx)
+
+    return minX + xCoordVropPx, minY + cardTopOffsetPx, maxX - xCoordVropPx, minY + cardBotOffsetPx
 
 
 def PreprocessImage(img):
