@@ -1,0 +1,120 @@
+import base64
+import cv2
+import numpy as np
+
+
+def IsTextLight(img):
+    """Detects whether text is lighter than its background."""
+    gray = img if len(img.shape) == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 100, 200)
+    kernel = np.ones((3, 3), np.uint8)
+    dilated = cv2.dilate(edges, kernel, iterations=1)
+
+    mask = cv2.bitwise_not(dilated)
+    text_pixels = gray[mask == 0]
+    background_pixels = gray[mask != 0]
+
+    if len(text_pixels) and len(background_pixels):
+        return np.mean(text_pixels) > np.mean(background_pixels)
+
+    return False
+
+
+def RemoveHorizontalLines(img):
+    """Removes horizontal black bars or lines from a binary image."""
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 1))
+    detected_lines = cv2.morphologyEx(img, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+    cleaned = cv2.bitwise_not(cv2.subtract(img, detected_lines))
+    return cleaned
+
+
+def Base64ToOpencv(base64String):
+    """Converts a base64-encoded string into an OpenCV image."""
+    image_bytes = base64.b64decode(base64String)
+    np_arr = np.frombuffer(image_bytes, np.uint8)
+    return cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+
+def GetContours(img, contourThreshold=None, minArea=2000, draw=False, filter=0):
+    """Finds significant external contours, optionally drawing them."""
+    if contourThreshold is None:
+        contourThreshold = [100, 100]
+    imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    imgBlur = cv2.GaussianBlur(imgGray, (5, 5), 1)
+    imgCanny = cv2.Canny(imgBlur, contourThreshold[0], contourThreshold[1])
+    kernel = np.ones((5, 5))
+    imgDial = cv2.dilate(imgCanny, kernel, iterations=3)
+    imgThresh = cv2.erode(imgDial, kernel, iterations=2)
+
+    contours, _ = cv2.findContours(imgThresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    finalContours = [
+        [len(approx), area, approx, cv2.boundingRect(approx), i]
+        for i in contours
+        if (area := cv2.contourArea(i)) > minArea
+        for param in [cv2.arcLength(i, True)]
+        for approx in [cv2.approxPolyDP(i, 0.02 * param, True)]
+        if filter == 0 or len(approx) == filter
+    ]
+
+    finalContours.sort(key=lambda x: x[1], reverse=True)
+    if draw:
+        for con in finalContours:
+            cv2.drawContours(img, con[4], -1, (0, 0, 255), 3)
+    return img, finalContours
+
+
+def Highpass(img, sigma):
+    """Applies a high-pass filter to emphasize edges."""
+    return img - cv2.GaussianBlur(img, (0, 0), sigma) + 127
+    # return img - cv2.GaussianBlur(img, (5, 5, sigma) + 127
+
+
+def ThresholdImage(img, invert=False):
+    """Applies binary thresholding to an image."""
+    white = 255
+    threshold = 100
+
+    thresh_type = cv2.THRESH_BINARY_INV if invert else cv2.THRESH_BINARY
+    _, binary = cv2.threshold(img, threshold, white, thresh_type)
+    return binary
+
+
+def IncreaseContrast(finalImage):
+    """Enhances local contrast using CLAHE."""
+    lab = cv2.cvtColor(finalImage, cv2.COLOR_BGR2LAB)
+    l_channel, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    cl = clahe.apply(l_channel)
+    limg = cv2.merge((cl, a, b))
+    return cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+
+
+def GetMinAndMaxFromPoints(points):
+    """Extracts min/max X,Y bounds from a set of contour points."""
+    minX = min(point[0][0] for point in points)
+    minY = min(point[0][1] for point in points)
+    maxX = max(point[0][0] for point in points)
+    # maxY = max(point[0][1] for point in points)  # Unused
+
+    cardWidth = maxX - minX
+    widthMultiplicationConst = 0.07
+    xOffset = int(cardWidth * widthMultiplicationConst)
+
+    topOffset = 22
+    heightMultiplicationConst = 0.11
+    cardBotOffsetPx = int(cardWidth * heightMultiplicationConst + topOffset)
+
+    return minX + xOffset, minY + topOffset, maxX - xOffset, minY + cardBotOffsetPx
+
+
+def CropToCard(img, points):
+    """Crops the image to the detected card region."""
+    minX, minY, maxX, maxY = GetMinAndMaxFromPoints(points)
+    height, width, _ = img.shape
+    padding = 0
+
+    minX, minY = max(minX - padding, 0), max(minY - padding, 0)
+    maxX, maxY = min(maxX + padding, width), min(maxY + padding, height)
+
+    return img[minY:maxY, minX:maxX]
+
