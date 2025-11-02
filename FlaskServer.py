@@ -28,7 +28,7 @@ def ReadCard():
         img64 = request.form["base64Img"]
         readText, img = OcrUtils.ReadTitleFromCard(img64)
         # return f"Read Text: {readText}"
-        # print(readText)
+        print(readText)
         _, buffer = cv2.imencode('.jpg', img)
         return Response(buffer.tobytes(), mimetype='image/jpeg')
     return render_template('index.html')

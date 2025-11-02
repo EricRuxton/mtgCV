@@ -46,7 +46,9 @@ def PrepareForOpticalCharacterRecognition(biggest, boxImg):
         highpassImage = cv2.bitwise_not(highpassImage)
 
     binaryImg = iProc.ThresholdImage(highpassImage, invert=True)
-    noLineImg = iProc.RemoveHorizontalLines(binaryImg)
+    ImageCombiner.AddImageToList(binaryImg)
+    smoothedImg = iProc.SmoothBinaryImage(binaryImg)
+    noLineImg = iProc.RemoveHorizontalLines(smoothedImg)
 
     return noLineImg
 

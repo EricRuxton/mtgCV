@@ -118,3 +118,18 @@ def CropToCard(img, points):
 
     return img[minY:maxY, minX:maxX]
 
+
+def SmoothBinaryImage(binary_img):
+    """
+    Removes small noise from a binary (black/white) image
+    using morphological opening and closing.
+    """
+    kernel = np.ones((2, 2), np.uint8)
+
+    # Remove small white specks (opening)
+    opened = cv2.morphologyEx(binary_img, cv2.MORPH_OPEN, kernel, iterations=1)
+
+    # Fill small black holes inside text (closing)
+    smoothed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+    return smoothed
