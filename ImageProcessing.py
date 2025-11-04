@@ -97,11 +97,14 @@ def GetMinAndMaxFromPoints(points):
     # maxY = max(point[0][1] for point in points)  # Unused
 
     cardWidth = maxX - minX
-    widthMultiplicationConst = 0.07
+    widthMultiplicationConst = 0.08
     xOffset = int(cardWidth * widthMultiplicationConst)
 
-    topOffset = 22
-    heightMultiplicationConst = 0.11
+    # topOffset = 22
+    # heightMultiplicationConst = 0.11
+    topOffset = int(cardWidth * 0.075)
+    # print("topOffset: " + str(topOffset))
+    heightMultiplicationConst = 0.08
     cardBotOffsetPx = int(cardWidth * heightMultiplicationConst + topOffset)
 
     return minX + xOffset, minY + topOffset, maxX - xOffset, minY + cardBotOffsetPx
@@ -111,7 +114,7 @@ def CropToCard(img, points):
     """Crops the image to the detected card region."""
     minX, minY, maxX, maxY = GetMinAndMaxFromPoints(points)
     height, width, _ = img.shape
-    padding = 0
+    padding = -5
 
     minX, minY = max(minX - padding, 0), max(minY - padding, 0)
     maxX, maxY = min(maxX + padding, width), min(maxY + padding, height)
@@ -133,3 +136,40 @@ def SmoothBinaryImage(binary_img):
     smoothed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel, iterations=1)
 
     return smoothed
+
+
+def FindTextRightBoundary(binary_img, density_threshold_ratio=0.05, gap_tolerance=10):
+    """
+    Detects the rightmost column that contains text (excluding logos/whitespace).
+    Returns the x-coordinate to crop at.
+
+    density_threshold_ratio: ratio of max pixel density considered 'text'
+    gap_tolerance: number of consecutive blank columns before we assume text ended
+    """
+    # Ensure text is white on black
+    white_pixels = np.sum(binary_img == 255)
+    black_pixels = np.sum(binary_img == 0)
+    if black_pixels < white_pixels:
+        binary_img = cv2.bitwise_not(binary_img)
+
+    h, w = binary_img.shape
+    col_sums = np.sum(binary_img == 255, axis=0)
+    max_val = np.max(col_sums)
+    threshold = max_val * density_threshold_ratio
+
+    # Find columns with text
+    text_cols = np.where(col_sums > threshold)[0]
+    if len(text_cols) == 0:
+        return w  # fallback: no text detected, return full width
+
+    # Scan from the rightmost text column and detect a sustained drop (whitespace/symbol region)
+    consecutive_blank = 0
+    for x in range(0, w):
+        if col_sums[x] <= threshold:
+            consecutive_blank += 1
+            if consecutive_blank >= gap_tolerance:
+                return x - gap_tolerance
+        else:
+            consecutive_blank = 0
+
+    return w  # no clear drop found, assume full width

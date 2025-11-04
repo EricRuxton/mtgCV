@@ -4,6 +4,8 @@ import cv2
 from pytesseract import pytesseract
 import re
 
+config = r'--oem 3 --psm 7'
+
 
 def ReadTitleFromCard(base64String):
     """Main OCR entry: decode, process, and read card title text."""
@@ -17,8 +19,9 @@ def ReadTitleFromCard(base64String):
     ImageCombiner.AddImageToList(finalImage)
 
     # TODO detect whitespace between words
-
-    text = pytesseract.image_to_string(finalImage)
+    text = pytesseract.image_to_string(finalImage, config=config, lang='eng')
+    # text = pytesseract.image_to_string(finalImage, lang='eng')
+    # text = pytesseract.image_to_string(finalImage)
     firstLine = text.splitlines()[0] if text.strip() else ""
     cleanedText = CleanString(firstLine)
 
@@ -27,14 +30,24 @@ def ReadTitleFromCard(base64String):
 
 def PrepareForOpticalCharacterRecognition(biggest, boxImg):
     """Preprocessing chain for OCR: crop, enhance, high-pass, threshold, and clean."""
-    croppedImg = iProc.CropToCard(boxImg, biggest)
+    # croppedImg = iProc.CropToCard(boxImg, biggest)
+    minX, minY, maxX, maxY = iProc.GetMinAndMaxFromPoints(biggest)
+
+    height, width, _ = boxImg.shape
+    padding = -5
+
+    minX, minY = max(minX - padding, 0), max(minY - padding, 0)
+    maxX, maxY = min(maxX + padding, width), min(maxY + padding, height)
+
+    croppedImg = boxImg[minY:maxY, minX:maxX]
+
+    # return croppedImg
     ImageCombiner.AddImageToList(croppedImg)
 
     contrastedImg = iProc.IncreaseContrast(croppedImg)
     ImageCombiner.AddImageToList(contrastedImg)
 
     greyImage = cv2.cvtColor(contrastedImg, cv2.COLOR_BGR2GRAY)
-    ImageCombiner.AddImageToList(greyImage)
 
     numCascades = 1
     highpassImage = greyImage
@@ -49,8 +62,8 @@ def PrepareForOpticalCharacterRecognition(biggest, boxImg):
     ImageCombiner.AddImageToList(binaryImg)
     smoothedImg = iProc.SmoothBinaryImage(binaryImg)
     noLineImg = iProc.RemoveHorizontalLines(smoothedImg)
-
-    return noLineImg
+    cutoff_x = iProc.FindTextRightBoundary(binaryImg)
+    return boxImg[minY:maxY, minX:(minX + cutoff_x)]  # TODO remove hardcoded num
 
 
 def CleanString(text):
