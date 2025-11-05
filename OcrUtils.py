@@ -4,7 +4,7 @@ import cv2
 from pytesseract import pytesseract
 import re
 
-config = r'--oem 3 --psm 7'
+pytesseractConfig = r'--oem 3 --psm 7'
 
 
 def ReadTitleFromCard(base64String):
@@ -15,22 +15,17 @@ def ReadTitleFromCard(base64String):
         return "No card detected", img
 
     biggest = conts[0][2]
-    finalImage = PrepareForOpticalCharacterRecognition(biggest, boxImg)
-    ImageCombiner.AddImageToList(finalImage)
+    finalImage = CropToTitle(biggest, boxImg)
 
-    # TODO detect whitespace between words
-    text = pytesseract.image_to_string(finalImage, config=config, lang='eng')
-    # text = pytesseract.image_to_string(finalImage, lang='eng')
-    # text = pytesseract.image_to_string(finalImage)
+    text = pytesseract.image_to_string(finalImage, config=pytesseractConfig, lang='eng')
     firstLine = text.splitlines()[0] if text.strip() else ""
     cleanedText = CleanString(firstLine)
 
     return cleanedText, ImageCombiner.CreateCombinedImage()
 
 
-def PrepareForOpticalCharacterRecognition(biggest, boxImg):
-    """Preprocessing chain for OCR: crop, enhance, high-pass, threshold, and clean."""
-    # croppedImg = iProc.CropToCard(boxImg, biggest)
+def CropToTitle(biggest, boxImg):
+    """Filter image to determine region of the title then return boxImg cropped to just that region"""
     minX, minY, maxX, maxY = iProc.GetMinAndMaxFromPoints(biggest)
 
     height, width, _ = boxImg.shape
@@ -41,29 +36,18 @@ def PrepareForOpticalCharacterRecognition(biggest, boxImg):
 
     croppedImg = boxImg[minY:maxY, minX:maxX]
 
-    # return croppedImg
-    ImageCombiner.AddImageToList(croppedImg)
-
     contrastedImg = iProc.IncreaseContrast(croppedImg)
-    ImageCombiner.AddImageToList(contrastedImg)
 
     greyImage = cv2.cvtColor(contrastedImg, cv2.COLOR_BGR2GRAY)
 
-    numCascades = 1
-    highpassImage = greyImage
-    for _ in range(numCascades):
-        highpassImage = iProc.Highpass(highpassImage, 3)
-        ImageCombiner.AddImageToList(highpassImage)
+    highpassImage = iProc.Highpass(greyImage, 3)
 
     if iProc.IsTextLight(highpassImage):
         highpassImage = cv2.bitwise_not(highpassImage)
 
     binaryImg = iProc.ThresholdImage(highpassImage, invert=True)
-    ImageCombiner.AddImageToList(binaryImg)
-    smoothedImg = iProc.SmoothBinaryImage(binaryImg)
-    noLineImg = iProc.RemoveHorizontalLines(smoothedImg)
     cutoff_x = iProc.FindTextRightBoundary(binaryImg)
-    return boxImg[minY:maxY, minX:(minX + cutoff_x)]  # TODO remove hardcoded num
+    return boxImg[minY:maxY, minX:(minX + cutoff_x)]
 
 
 def CleanString(text):

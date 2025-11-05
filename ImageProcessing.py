@@ -20,14 +20,6 @@ def IsTextLight(img):
     return False
 
 
-def RemoveHorizontalLines(img):
-    """Removes horizontal black bars or lines from a binary image."""
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 1))
-    detected_lines = cv2.morphologyEx(img, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
-    cleaned = cv2.bitwise_not(cv2.subtract(img, detected_lines))
-    return cleaned
-
-
 def Base64ToOpencv(base64String):
     """Converts a base64-encoded string into an OpenCV image."""
     image_bytes = base64.b64decode(base64String)
@@ -66,7 +58,6 @@ def GetContours(img, contourThreshold=None, minArea=2000, draw=False, filter=0):
 def Highpass(img, sigma):
     """Applies a high-pass filter to emphasize edges."""
     return img - cv2.GaussianBlur(img, (0, 0), sigma) + 127
-    # return img - cv2.GaussianBlur(img, (5, 5, sigma) + 127
 
 
 def ThresholdImage(img, invert=False):
@@ -100,42 +91,11 @@ def GetMinAndMaxFromPoints(points):
     widthMultiplicationConst = 0.08
     xOffset = int(cardWidth * widthMultiplicationConst)
 
-    # topOffset = 22
-    # heightMultiplicationConst = 0.11
     topOffset = int(cardWidth * 0.075)
-    # print("topOffset: " + str(topOffset))
     heightMultiplicationConst = 0.08
     cardBotOffsetPx = int(cardWidth * heightMultiplicationConst + topOffset)
 
     return minX + xOffset, minY + topOffset, maxX - xOffset, minY + cardBotOffsetPx
-
-
-def CropToCard(img, points):
-    """Crops the image to the detected card region."""
-    minX, minY, maxX, maxY = GetMinAndMaxFromPoints(points)
-    height, width, _ = img.shape
-    padding = -5
-
-    minX, minY = max(minX - padding, 0), max(minY - padding, 0)
-    maxX, maxY = min(maxX + padding, width), min(maxY + padding, height)
-
-    return img[minY:maxY, minX:maxX]
-
-
-def SmoothBinaryImage(binary_img):
-    """
-    Removes small noise from a binary (black/white) image
-    using morphological opening and closing.
-    """
-    kernel = np.ones((2, 2), np.uint8)
-
-    # Remove small white specks (opening)
-    opened = cv2.morphologyEx(binary_img, cv2.MORPH_OPEN, kernel, iterations=1)
-
-    # Fill small black holes inside text (closing)
-    smoothed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel, iterations=1)
-
-    return smoothed
 
 
 def FindTextRightBoundary(binary_img, density_threshold_ratio=0.05, gap_tolerance=10):
@@ -162,7 +122,7 @@ def FindTextRightBoundary(binary_img, density_threshold_ratio=0.05, gap_toleranc
     if len(text_cols) == 0:
         return w  # fallback: no text detected, return full width
 
-    # Scan from the rightmost text column and detect a sustained drop (whitespace/symbol region)
+    # Scan from the rightmost text column and detect sustained whitespace
     consecutive_blank = 0
     for x in range(0, w):
         if col_sums[x] <= threshold:
