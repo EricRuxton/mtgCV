@@ -91,14 +91,15 @@ def GetMinAndMaxFromPoints(points):
     widthMultiplicationConst = 0.08
     xOffset = int(cardWidth * widthMultiplicationConst)
 
-    topOffset = int(cardWidth * 0.075)
-    heightMultiplicationConst = 0.08
+    # topOffset = int(cardWidth * 0.077)
+    topOffset = int(cardWidth * 0.05)
+    heightMultiplicationConst = 0.1
     cardBotOffsetPx = int(cardWidth * heightMultiplicationConst + topOffset)
 
     return minX + xOffset, minY + topOffset, maxX - xOffset, minY + cardBotOffsetPx
 
 
-def FindTextRightBoundary(binary_img, density_threshold_ratio=0.05, gap_tolerance=10):
+def FindTextRightBoundary(binary_img, density_threshold_ratio=0.3, gap_tolerance=30):
     """
     Detects the rightmost column that contains text (excluding logos/whitespace).
     Returns the x-coordinate to crop at.
@@ -128,7 +129,8 @@ def FindTextRightBoundary(binary_img, density_threshold_ratio=0.05, gap_toleranc
         if col_sums[x] <= threshold:
             consecutive_blank += 1
             if consecutive_blank >= gap_tolerance:
-                return x - gap_tolerance
+                padding = 2
+                return x - gap_tolerance + padding
         else:
             consecutive_blank = 0
 

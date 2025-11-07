@@ -1,7 +1,8 @@
 import os
+import cv2
 import OcrUtils
 
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, Response
 from pytesseract import pytesseract
 
 
@@ -22,13 +23,12 @@ def ReadCard():
         img64 = request.form["base64Img"]
         readText, img = OcrUtils.ReadTitleFromCard(img64)
 
-        '''
         # For debugging
         print(readText)
         _, buffer = cv2.imencode('.jpg', img)
         return Response(buffer.tobytes(), mimetype='image/jpeg')
-        '''
-        return f"Read Text: {readText}"
+
+        # return Response(f"Read Text: {readText}")
 
     return render_template('index.html')
 

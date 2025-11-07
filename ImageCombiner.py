@@ -9,7 +9,7 @@ total_height = 0
 def AddImageToList(img):
     """Adds an image to the global list for visual debugging output."""
     global max_width, total_height
-    images.append(img)
+    images.insert(0, img)
     max_width = max(max_width, img.shape[1])
     total_height += img.shape[0]
 

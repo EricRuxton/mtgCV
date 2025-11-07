@@ -16,12 +16,19 @@ def ReadTitleFromCard(base64String):
 
     biggest = conts[0][2]
     finalImage = CropToTitle(biggest, boxImg)
-
     text = pytesseract.image_to_string(finalImage, config=pytesseractConfig, lang='eng')
     firstLine = text.splitlines()[0] if text.strip() else ""
+
+    setSymbol = CropToTitle(biggest, boxImg)
+    ImageCombiner.AddImageToList(setSymbol)
+
     cleanedText = CleanString(firstLine)
 
     return cleanedText, ImageCombiner.CreateCombinedImage()
+
+
+def CropToSetSymbol(boxImg):
+    return boxImg[:, :]
 
 
 def CropToTitle(biggest, boxImg):
@@ -41,11 +48,12 @@ def CropToTitle(biggest, boxImg):
     greyImage = cv2.cvtColor(contrastedImg, cv2.COLOR_BGR2GRAY)
 
     highpassImage = iProc.Highpass(greyImage, 3)
-
+    ImageCombiner.AddImageToList(highpassImage)
     if iProc.IsTextLight(highpassImage):
         highpassImage = cv2.bitwise_not(highpassImage)
 
     binaryImg = iProc.ThresholdImage(highpassImage, invert=True)
+    ImageCombiner.AddImageToList(binaryImg)
     cutoff_x = iProc.FindTextRightBoundary(binaryImg)
     return boxImg[minY:maxY, minX:(minX + cutoff_x)]
 
