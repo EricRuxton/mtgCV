@@ -16,22 +16,30 @@ def ReadTitleFromCard(base64String):
         return "No card detected", img
 
     biggest = conts[0][2]
-    finalImage = CropToTitle(biggest, boxImg)
+    finalImage, minXTitle, minYTitle = CropToTitle(biggest, boxImg)
     if finalImage is None:
         return "No title detected", boxImg
     text = pytesseract.image_to_string(finalImage, config=pytesseractConfig, lang='eng')
     firstLine = text.splitlines()[0] if text.strip() else ""
 
-    # setSymbol = CropToTitle(biggest, boxImg)
-    # ImageCombiner.AddImageToList(setSymbol)
+    minX, minY, maxX, maxY = iProc.GetMinAndMaxFromPoints(biggest)
+    cardWidth = maxX - minX
+    setSymbol = CropToSetSymbol(boxImg, minXTitle, minYTitle, cardWidth)
+
+    # TODO: add set symbol identification
 
     cleanedText = CleanString(firstLine)
 
     return cleanedText, ImageCombiner.CreateCombinedImage()
 
 
-def CropToSetSymbol(boxImg):
-    return boxImg[:, :]
+def CropToSetSymbol(boxImg, minX, minY, cardWidth):
+    print(cardWidth)
+    symbol = boxImg[int(minY +
+                        cardWidth*0.81):int(minY + cardWidth*0.93), int(minX +
+                                                                        cardWidth*0.88):int(minX + cardWidth*0.98)]
+    ImageCombiner.AddImageToList(symbol)
+    return symbol
 
 
 def CropToTitle(biggest, boxImg):
@@ -72,7 +80,7 @@ def CropToTitle(biggest, boxImg):
 
     ImageCombiner.AddImageToList(croppedTighter)
 
-    return croppedTighter
+    return croppedTighter, minX, minYTitle
 
 
 def GetCroppedImage(boxImg, maxX, maxY, minX, minY):
