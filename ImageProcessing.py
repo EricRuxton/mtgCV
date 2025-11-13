@@ -86,6 +86,9 @@ def GetMinAndMaxFromPoints(points):
     minY = min(point[0][1] for point in points)
     maxX = max(point[0][0] for point in points)
     # maxY = max(point[0][1] for point in points)  # Unused
+    # maxY = int(minY + (maxY - minY)/4)
+
+    # return minX, minY, maxX, maxY
 
     cardWidth = maxX - minX
     widthMultiplicationConst = 0.08
@@ -93,7 +96,7 @@ def GetMinAndMaxFromPoints(points):
 
     # topOffset = int(cardWidth * 0.077)
     topOffset = int(cardWidth * 0.05)
-    heightMultiplicationConst = 0.1
+    heightMultiplicationConst = 0.13
     cardBotOffsetPx = int(cardWidth * heightMultiplicationConst + topOffset)
 
     return minX + xOffset, minY + topOffset, maxX - xOffset, minY + cardBotOffsetPx
