@@ -1,4 +1,5 @@
 import ImageProcessing as iProc
+import SetSymbolProcessing as sProc
 import ImageCombiner
 import cv2
 from pytesseract import pytesseract
@@ -22,24 +23,16 @@ def ReadTitleFromCard(base64String):
     text = pytesseract.image_to_string(finalImage, config=pytesseractConfig, lang='eng')
     firstLine = text.splitlines()[0] if text.strip() else ""
 
-    minX, minY, maxX, maxY = iProc.GetMinAndMaxFromPoints(biggest)
-    cardWidth = maxX - minX
-    setSymbol = CropToSetSymbol(boxImg, minXTitle, minYTitle, cardWidth)
-
-    # TODO: add set symbol identification
-
     cleanedText = CleanString(firstLine)
 
-    return cleanedText, ImageCombiner.CreateCombinedImage()
+    minX, minY, maxX, maxY = iProc.GetMinAndMaxFromPoints(biggest)
+    cardWidth = maxX - minX
+    setSymbol = sProc.CropToSetSymbol(boxImg, minXTitle, minYTitle, cardWidth)
 
+    setName = sProc.GuessSet(setSymbol, cleanedText)
 
-def CropToSetSymbol(boxImg, minX, minY, cardWidth):
-    print(cardWidth)
-    symbol = boxImg[int(minY +
-                        cardWidth*0.81):int(minY + cardWidth*0.93), int(minX +
-                                                                        cardWidth*0.88):int(minX + cardWidth*0.98)]
-    ImageCombiner.AddImageToList(symbol)
-    return symbol
+    return cleanedText, setName, ImageCombiner.CreateCombinedImage()
+
 
 
 def CropToTitle(biggest, boxImg):

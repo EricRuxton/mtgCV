@@ -21,10 +21,11 @@ def home():
 def ReadCard():
     if request.method == 'POST':
         img64 = request.form["base64Img"]
-        readText, img = OcrUtils.ReadTitleFromCard(img64)
+        readText, setName, img = OcrUtils.ReadTitleFromCard(img64)
 
         # For debugging
         print(readText)
+        print("Set: " + setName)
         _, buffer = cv2.imencode('.jpg', img)
         return Response(buffer.tobytes(), mimetype='image/jpeg')
 
